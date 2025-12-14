@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="KsqlConsumerApplication" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.ksqllearning.consumer.KsqlConsumerApplication" />
+    <module name="ksql-learning-app.ksql-consumer.main" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

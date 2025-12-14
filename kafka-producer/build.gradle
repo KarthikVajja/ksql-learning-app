@@ -1,0 +1,9 @@
+description = 'Kafka Producer Module'
+
+springBoot {
+    mainClass = 'com.ksqllearning.producer.KafkaProducerApplication'
+}
+
+dependencies {
+    // Module specific dependencies can go here
+}

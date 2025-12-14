@@ -1,0 +1,4 @@
+rootProject.name = 'ksql-learning-app'
+
+include 'kafka-producer'
+include 'ksql-consumer'
