@@ -26,99 +26,84 @@ public class KsqlQueryService {
     public CompletableFuture<Void> initializeKsqlStreamsAndTables() {
         return CompletableFuture.runAsync(() -> {
             try {
-                // Create stream from Kafka topic
+                // First, clean up existing streams and tables
+                cleanupExistingObjects();
+
+                // Create stream from Kafka topic using PROTOBUF_NOSR
                 String createStreamSql = """
-                    CREATE STREAM IF NOT EXISTS sales_stream (
-                        transactionId VARCHAR KEY,
-                        customerId VARCHAR,
-                        productId VARCHAR,
-                        productName VARCHAR,
-                        category VARCHAR,
-                        price DOUBLE,
-                        quantity INT,
-                        totalAmount DOUBLE,
-                        paymentMethod VARCHAR,
-                        region VARCHAR,
-                        store VARCHAR,
-                        timestamp VARCHAR
-                    ) WITH (
-                        KAFKA_TOPIC='sales-transactions',
-                        VALUE_FORMAT='JSON',
-                        TIMESTAMP='timestamp',
-                        TIMESTAMP_FORMAT='yyyy-MM-dd''T''HH:mm:ss'
-                    );
+                        CREATE STREAM IF NOT EXISTS sales_stream (
+                          transaction_id VARCHAR KEY,
+                          customer_id VARCHAR,
+                          product_id VARCHAR,
+                          product_name VARCHAR,
+                          category VARCHAR,
+                          price DOUBLE,
+                          quantity INT,
+                          total_amount DOUBLE,
+                          payment_method VARCHAR,
+                          region VARCHAR,
+                          store VARCHAR,
+                          timestamp BIGINT
+                        ) WITH (
+                          KAFKA_TOPIC='sales-transactions',
+                          KEY_FORMAT='KAFKA',
+                          VALUE_FORMAT='PROTOBUF_NOSR',
+                          PARTITIONS=1,
+                          REPLICAS=1
+                        );
                     """;
+
 
                 ksqlClient.executeStatement(createStreamSql).get();
-                log.info("Created SALES_STREAM");
+                log.info("Created SALES_STREAM with PROTOBUF_NOSR format");
 
-                // Create table for aggregations
-                String createTableSql = """
-                    CREATE TABLE IF NOT EXISTS sales_by_category AS
-                    SELECT 
-                        category,
-                        COUNT(*) AS transaction_count,
-                        SUM(totalAmount) AS total_revenue,
-                        AVG(totalAmount) AS avg_transaction_value,
-                        MIN(totalAmount) AS min_transaction,
-                        MAX(totalAmount) AS max_transaction
-                    FROM sales_stream
-                    GROUP BY category;
+                // Create sales table
+                String salesTableSql = """
+                        CREATE TABLE sales_table AS
+                           SELECT transaction_id,
+                                  SUM(total_amount) AS total_amount,
+                                  MAX(timestamp) AS latest_timestamp
+                           FROM SALES_STREAM
+                           GROUP BY transaction_id;
                     """;
-//                String createTableSql = """
-//                    CREATE TABLE IF NOT EXISTS sales_by_category AS
-//                    SELECT
-//                        category,
-//                        COUNT(*) AS transaction_count,
-//                        SUM(totalAmount) AS total_revenue,
-//                        AVG(totalAmount) AS avg_transaction_value,
-//                        MIN(totalAmount) AS min_transaction,
-//                        MAX(totalAmount) AS max_transaction
-//                    FROM sales_stream
-//                    GROUP BY category
-//                    EMIT CHANGES;
-//                    """;
 
-                try {
-                    ksqlClient.executeStatement(createTableSql).get();
-                    log.info("Created SALES_BY_CATEGORY table");
-                } catch (Exception e) {
-                    log.info("SALES_BY_CATEGORY table may already exist");
-                }
+                ksqlClient.executeStatement(salesTableSql).get();
+                log.info("Created SALES table");
 
-                // Create another useful table - sales by region
-                String createRegionTableSql = """
-                    CREATE TABLE IF NOT EXISTS sales_by_region AS
-                    SELECT 
-                        region,
-                        COUNT(*) AS transaction_count,
-                        SUM(totalAmount) AS total_revenue
-                    FROM sales_stream
-                    GROUP BY region;
-                    """;
-//                String createRegionTableSql = """
-//                    CREATE TABLE IF NOT EXISTS sales_by_region AS
-//                    SELECT
-//                        region,
-//                        COUNT(*) AS transaction_count,
-//                        SUM(totalAmount) AS total_revenue
-//                    FROM sales_stream
-//                    GROUP BY region
-//                    EMIT CHANGES;
-//                    """;
-
-                try {
-                    ksqlClient.executeStatement(createRegionTableSql).get();
-                    log.info("Created SALES_BY_REGION table");
-                } catch (Exception e) {
-                    log.info("SALES_BY_REGION table may already exist");
-                }
 
             } catch (Exception e) {
                 log.error("Error initializing KSQL streams/tables", e);
                 throw new RuntimeException(e);
             }
         });
+    }
+
+    private void cleanupExistingObjects() {
+        log.info("Cleaning up existing KSQL objects...");
+        
+        try {
+            // Drop tables first (in reverse order of dependencies)
+            dropIfExists("DROP TABLE IF EXISTS sales_table DELETE TOPIC;");
+            
+            // Then drop streams
+            dropIfExists("DROP STREAM IF EXISTS sales_stream DELETE TOPIC;");
+            
+            // Small delay to ensure cleanup completes
+            Thread.sleep(2000);
+            
+            log.info("Cleanup completed successfully");
+        } catch (Exception e) {
+            log.warn("Error during cleanup (may be safe to ignore): {}", e.getMessage());
+        }
+    }
+
+    private void dropIfExists(String dropStatement) {
+        try {
+            ksqlClient.executeStatement(dropStatement).get();
+            log.info("Executed: {}", dropStatement);
+        } catch (Exception e) {
+            log.debug("Could not execute drop statement (object may not exist): {}", e.getMessage());
+        }
     }
 
     public CompletableFuture<List<Map<String, Object>>> executeQuery(String sql) {
@@ -146,70 +131,5 @@ public class KsqlQueryService {
                 throw new RuntimeException("Query execution failed: " + e.getMessage(), e);
             }
         });
-    }
-
-    public CompletableFuture<List<Map<String, Object>>> getTotalSalesByCategory() {
-        String query = "SELECT * FROM sales_by_category;";
-        return executeQuery(query);
-    }
-
-    public CompletableFuture<List<Map<String, Object>>> getTotalSalesByRegion() {
-        String query = "SELECT * FROM sales_by_region;";
-        return executeQuery(query);
-    }
-
-    public CompletableFuture<List<Map<String, Object>>> getHighValueTransactions(double minAmount) {
-        String query = String.format(
-            "SELECT transactionId, customerId, productName, totalAmount, region, timestamp " +
-            "FROM sales_stream " +
-            "WHERE totalAmount > %.2f " +
-//            "EMIT CHANGES " +
-            "LIMIT 100;", minAmount);
-        return executeQuery(query);
-    }
-
-    public CompletableFuture<List<Map<String, Object>>> getTransactionsByPaymentMethod() {
-        String query = """
-            SELECT 
-                paymentMethod,
-                COUNT(*) AS count,
-                SUM(totalAmount) AS total_revenue
-            FROM sales_stream
-            GROUP BY paymentMethod
-            """;
-//        String query = """
-//            SELECT
-//                paymentMethod,
-//                COUNT(*) AS count,
-//                SUM(totalAmount) AS total_revenue
-//            FROM sales_stream
-//            GROUP BY paymentMethod
-//            EMIT CHANGES;
-//            """;
-        return executeQuery(query);
-    }
-
-    public CompletableFuture<List<Map<String, Object>>> getTopProducts(int limit) {
-        String query = String.format("""
-            SELECT 
-                productName,
-                COUNT(*) AS purchase_count,
-                SUM(totalAmount) AS total_revenue
-            FROM sales_stream
-            GROUP BY productName
-            LIMIT %d;
-            """, limit);
-        return executeQuery(query);
-//        String query = String.format("""
-//            SELECT
-//                productName,
-//                COUNT(*) AS purchase_count,
-//                SUM(totalAmount) AS total_revenue
-//            FROM sales_stream
-//            GROUP BY productName
-//            EMIT CHANGES
-//            LIMIT %d;
-//            """, limit);
-//        return executeQuery(query);
     }
 }

@@ -54,6 +54,7 @@ services:
       KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
       KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
       KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+      KSQL_KSQL_STREAMS_AUTO_OFFSET_RESET: 'earliest'
     volumes:
       - ./protos:/opt/ksqldb/protos
     networks:

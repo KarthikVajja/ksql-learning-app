@@ -1,24 +1,60 @@
 plugins {
     id 'org.springframework.boot'
+    id 'com.google.protobuf' version '0.9.4'
 }
+
 description = 'KSQL Consumer Module'
 
 springBoot {
     mainClass = 'com.ksqllearning.consumer.KsqlConsumerApplication'
 }
 
-dependencies {
-    // KSQLDB Client - using older stable version
-    implementation('io.confluent.ksql:ksqldb-api-client:7.4.0') {
-        exclude group: 'org.slf4j', module: 'slf4j-reload4j'
-        exclude group: 'ch.qos.reload4j', module: 'reload4j'
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.24.0'
     }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {}
+            }
+        }
+    }
+}
 
-    // REQUIRED for ksqlDB client
-    implementation 'org.apache.kafka:kafka-streams'
+sourceSets {
+    main {
+        proto {
+            srcDir "${project.rootDir}/protos"
+        }
+    }
+}
 
+dependencies {
+    // KSQLDB Client
+    implementation('io.confluent.ksql:ksqldb-api-client:7.4.0') {
+        exclude group: 'io.confluent.cloud', module: 'events-schema'
+        exclude group: 'io.confluent', module: 'broker-plugins'
+        exclude group: 'io.confluent', module: 'auth-metadata'
+        exclude group: 'org.slf4j', module: 'slf4j-reload4j'
+    }
+    
+    // Protobuf dependencies
+    implementation 'com.google.protobuf:protobuf-java:3.24.0'
+    implementation 'com.google.protobuf:protobuf-java-util:3.24.0'
+    
+    // Kafka Protobuf Deserializer
+    implementation 'io.confluent:kafka-protobuf-serializer:7.5.0'
     
     // Add these to handle missing transitive dependencies
     implementation 'com.google.guava:guava:32.1.3-jre'
     implementation 'org.apache.commons:commons-lang3:3.13.0'
+
+    implementation 'org.springframework.boot:spring-boot-starter-logging'
+
+    implementation 'org.apache.kafka:kafka-streams:3.7.0'
+}
+
+tasks.withType(Copy) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
