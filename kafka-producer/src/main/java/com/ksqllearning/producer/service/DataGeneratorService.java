@@ -1,13 +1,13 @@
 package com.ksqllearning.producer.service;
 
-import com.ksqllearning.producer.model.SalesTransaction;
+import com.ksqllearning.proto.SalesTransaction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -22,7 +22,7 @@ import java.util.concurrent.Executors;
 public class DataGeneratorService {
 
     @Autowired
-    private KafkaTemplate<String, SalesTransaction> kafkaTemplate;
+    private KafkaTemplate<String, byte[]> kafkaTemplate;
     private static final String TOPIC = "sales-transactions";
     
     private static final String[] PRODUCTS = {
@@ -49,7 +49,7 @@ public class DataGeneratorService {
     
     private final Random random = new Random();
 
-    public DataGeneratorService(KafkaTemplate<String, SalesTransaction> kafkaTemplate) {
+    public DataGeneratorService(KafkaTemplate<String, byte[]> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
 
@@ -58,7 +58,7 @@ public class DataGeneratorService {
             log.info("Starting to generate {} records", numberOfRecords);
             long startTime = System.currentTimeMillis();
             
-            ExecutorService executor = Executors.newFixedThreadPool(10);
+            ExecutorService executor = Executors.newFixedThreadPool(40);
             List<CompletableFuture<Void>> futures = new ArrayList<>();
             
             int batchSize = 10000;
@@ -71,7 +71,7 @@ public class DataGeneratorService {
                 CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                     for (int i = 0; i < recordsInBatch; i++) {
                         SalesTransaction transaction = generateRandomTransaction();
-                        kafkaTemplate.send(TOPIC, transaction.getTransactionId(), transaction);
+                        kafkaTemplate.send(TOPIC, transaction.getTransactionId(), transaction.toByteArray());
                         
                         if ((batchNumber * batchSize + i + 1) % 50000 == 0) {
                             log.info("Sent {} records", batchNumber * batchSize + i + 1);
@@ -101,20 +101,21 @@ public class DataGeneratorService {
         String product = PRODUCTS[random.nextInt(PRODUCTS.length)];
         int quantity = random.nextInt(10) + 1;
         double price = 50 + (random.nextDouble() * 1950); // $50 to $2000
+        double totalAmount = price * quantity;
         
-        return SalesTransaction.builder()
-                .transactionId(UUID.randomUUID().toString())
-                .customerId("CUST-" + String.format("%06d", random.nextInt(100000)))
-                .productId("PROD-" + String.format("%05d", random.nextInt(50000)))
-                .productName(product)
-                .category(CATEGORIES[random.nextInt(CATEGORIES.length)])
-                .price(Math.round(price * 100.0) / 100.0)
-                .quantity(quantity)
-                .totalAmount(Math.round(price * quantity * 100.0) / 100.0)
-                .paymentMethod(PAYMENT_METHODS[random.nextInt(PAYMENT_METHODS.length)])
-                .region(REGIONS[random.nextInt(REGIONS.length)])
-                .store(STORES[random.nextInt(STORES.length)])
-                .timestamp(LocalDateTime.now().minusSeconds(random.nextInt(86400))) // Random time within last 24 hours
+        return SalesTransaction.newBuilder()
+                .setTransactionId(UUID.randomUUID().toString())
+                .setCustomerId("CUST-" + String.format("%06d", random.nextInt(100000)))
+                .setProductId("PROD-" + String.format("%05d", random.nextInt(50000)))
+                .setProductName(product)
+                .setCategory(CATEGORIES[random.nextInt(CATEGORIES.length)])
+                .setPrice(Math.round(price * 100.0) / 100.0)
+                .setQuantity(quantity)
+                .setTotalAmount(Math.round(totalAmount * 100.0) / 100.0)
+                .setPaymentMethod(PAYMENT_METHODS[random.nextInt(PAYMENT_METHODS.length)])
+                .setRegion(REGIONS[random.nextInt(REGIONS.length)])
+                .setStore(STORES[random.nextInt(STORES.length)])
+                .setTimestamp(Instant.now().minusSeconds(random.nextInt(86400)).toEpochMilli())
                 .build();
     }
 }

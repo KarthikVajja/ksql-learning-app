@@ -1,9 +1,41 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'com.google.protobuf'
+}
+
 description = 'Kafka Producer Module'
 
 springBoot {
     mainClass = 'com.ksqllearning.producer.KafkaProducerApplication'
 }
 
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.24.0'
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {}
+            }
+        }
+    }
+}
+
+tasks.withType(Copy) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+sourceSets {
+    main {
+        proto {
+            srcDir "${project.rootDir}/protos"
+        }
+    }
+}
+
 dependencies {
-    // Module specific dependencies can go here
+    // Protobuf dependencies
+    implementation 'com.google.protobuf:protobuf-java:3.24.0'
+
 }

@@ -2,12 +2,14 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.3.5' apply false
     id 'io.spring.dependency-management' version '1.1.4' apply false
+    id 'com.google.protobuf' version '0.9.4' apply false
 }
 
 subprojects {
     apply plugin: 'java'
-    apply plugin: 'org.springframework.boot'
+
     apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'com.google.protobuf'
 
     group = 'com.ksqllearning'
     version = '1.0.0'
@@ -40,6 +42,12 @@ subprojects {
 
         // Kafka
         implementation 'org.springframework.kafka:spring-kafka'
+        implementation 'org.apache.kafka:kafka-clients:3.7.0'
+
+        // Protobuf
+        implementation 'com.google.protobuf:protobuf-java:3.25.3'
+        implementation 'com.google.protobuf:protobuf-java-util:3.24.0'
+        implementation 'io.confluent:kafka-protobuf-serializer:7.5.0'
 
         // Lombok
         compileOnly 'org.projectlombok:lombok'
@@ -52,6 +60,36 @@ subprojects {
         // Testing
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
         testImplementation 'org.springframework.kafka:spring-kafka-test'
+    }
+
+    protobuf {
+        protoc {
+            artifact = "com.google.protobuf:protoc:3.25.3"
+        }
+
+        generatedFilesBaseDir = "$buildDir/generated"
+
+        generateProtoTasks {
+            all().configureEach {
+                builtins {
+                    java {}
+                }
+            }
+        }
+    }
+
+    /**
+     * Tell Gradle where your proto files live
+     */
+    sourceSets {
+        main {
+            proto {
+                srcDir "${rootProject.projectDir}/protos"
+            }
+            java {
+                srcDir "$buildDir/generated/source/proto/main/java"
+            }
+        }
     }
 
     tasks.named('test') {

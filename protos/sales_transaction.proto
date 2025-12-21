@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package com.ksqllearning.proto;
+
+option java_package = "com.ksqllearning.proto";
+option java_outer_classname = "SalesTransactionProto";
+option java_multiple_files = true;
+
+message SalesTransaction {
+  string transaction_id = 1;
+  string customer_id = 2;
+  string product_id = 3;
+  string product_name = 4;
+  string category = 5;
+  double price = 6;
+  int32 quantity = 7;
+  double total_amount = 8;
+  string payment_method = 9;
+  string region = 10;
+  string store = 11;
+  int64 timestamp = 12; // Unix timestamp in milliseconds
+}

@@ -1,3 +1,6 @@
+plugins {
+    id 'org.springframework.boot'
+}
 description = 'KSQL Consumer Module'
 
 springBoot {
